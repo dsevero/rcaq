@@ -23,7 +23,6 @@ class LocalEncoder(Encoder):
 
         if self.merge_protoregions:
             non_empty_regions = np.unique(i)
-            # print(non_empty_regions)
             self.protos = self.protos.sel(p=non_empty_regions)
             self.q_indices = self.q_indices.sel(p=non_empty_regions)
             i = (np.power(X - self.protos, 2)
@@ -32,21 +31,18 @@ class LocalEncoder(Encoder):
 
         return i
 
-    # def assign_to_proto(self, X):
-    #     return (np.power(X - self.protos, 2)
-    #               .sum('d')
-    #               .argmin('p'))
-
     def encode(self, X):
         #returns the proto which is closest to the point
         i = self.assign_to_proto(X)
         return self.q_indices.sel(p=i)
 
     def optimize(self, X, dec, loss_func):
-        # assign_to_proto = find closest proto. P=divide X to |P| groups each holding indices of points closest to it
+        # assign_to_proto = find closest proto.
+        # P = divide X to |P| groups each holding indices of points closest to it
         P = self.assign_to_proto(X)
-        #temp=loss_func(X, dec.codebook).groupby(P).mean().rename(group='p')
-        # assign new quant values based on the average (x_avg,y_avg) of the loss on all points quantizied to p. If x_avg<y_avg q=0
+
+        # assign new quant values based on the average (x_avg,y_avg)
+        # of the loss on all points quantizied to p. If x_avg<y_avg q=0
         q_indices = (loss_func(X, dec.codebook)
                      .groupby(P)
                      .mean()
@@ -89,10 +85,12 @@ class DistributedEncoder(Encoder):
         self.rate = np.prod(self.rates)
 
     def encode(self, X):
+        # Calling to encode method of LocalEncoder (which calls assign_to_proto)
         Q = [enc(X.sel(d=[i]))
-             for i, enc in enumerate(self.encoders)] # Calling to encode method of LocalEncoder (which calls assign_to_proto)
-        temp = xr.concat(Q, dim='d').T.pipe(self.flatten)
-        return xr.concat(Q, dim='d').T.pipe(self.flatten) # return single value which is p[0]Q_1+Q_2
+             for i, enc in enumerate(self.encoders)] 
+
+        # return single value which is p[0]Q_1+Q_2
+        return xr.concat(Q, dim='d').T.pipe(self.flatten) 
 
     def flatten(self, Q):
         Q_flat = np.ravel_multi_index(Q.T, dims=self.rates)
@@ -126,7 +124,6 @@ class DistributedEncoder(Encoder):
                     lossVec[p]=loss[ind]
                     ind=ind+1
                 losses.append(lossVec)
-                # losses.append(loss)
             losses = xr.concat(losses, dim='opt').T
             # choose for each proto the q_index with the lower lost
             q_indices = losses.argmin('opt')
@@ -149,8 +146,3 @@ class DistributedEncoder(Encoder):
 
     def copy(self):
         return type(self)([e.copy() for e in self.encoders])
-
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
